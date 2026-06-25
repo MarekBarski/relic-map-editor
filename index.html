@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Last Relic — Map Editor</title>
+<style>
+  :root{--bg:#1a1410;--panel:#241c16;--line:#3a2e24;--ink:#c8b89a;
+    --ink-dim:#7d6f5c;--accent:#b8c76f;--hot:#9a6759;--sel:#b8c76f}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--ink);font:13px/1.4 "Courier New",monospace;
+    display:flex;flex-direction:column;overflow:hidden}
+  header{padding:7px 12px;border-bottom:1px solid var(--line);display:flex;gap:14px;
+    align-items:center;flex-wrap:wrap;background:var(--panel)}
+  header h1{font-size:14px;margin:0;letter-spacing:.5px;color:var(--accent);font-weight:700}
+  header .sub{color:var(--ink-dim);font-size:11px}
+  .group{display:flex;gap:6px;align-items:center}
+  .sep{width:1px;height:22px;background:var(--line)}
+  label{color:var(--ink-dim);font-size:11px}
+  input[type=number],input[type=text]{background:#15100c;border:1px solid var(--line);
+    color:var(--ink);padding:3px 5px;font:12px monospace;border-radius:3px}
+  input[type=number]{width:50px}
+  select{background:#15100c;border:1px solid var(--line);color:var(--ink);
+    padding:3px;font:11px monospace;border-radius:3px}
+  button{background:#2e241b;border:1px solid var(--line);color:var(--ink);
+    padding:4px 9px;font:12px monospace;cursor:pointer;border-radius:3px}
+  button:hover{border-color:var(--accent);color:var(--accent)}
+  button.danger:hover{border-color:var(--hot);color:var(--hot)}
+  button.on{border-color:var(--accent);color:var(--accent);background:#1d1611}
+  main{flex:1;display:flex;min-height:0}
+  #side{width:250px;border-right:1px solid var(--line);background:var(--panel);
+    display:flex;flex-direction:column;min-height:0}
+  .side-sec{border-bottom:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+  .side-sec h2{font-size:11px;margin:0;padding:6px 10px;color:var(--ink-dim);
+    text-transform:uppercase;letter-spacing:1px;background:#1d1611;
+    display:flex;justify-content:space-between;align-items:center}
+  .side-sec h2 button{padding:1px 6px;font-size:10px}
+  .pal{overflow:auto;padding:6px;display:flex;flex-wrap:wrap;gap:3px;align-content:flex-start;min-height:60px}
+  .cell{width:30px;height:30px;border:2px solid transparent;cursor:pointer;
+    position:relative;background:#000;image-rendering:pixelated}
+  .cell:hover{border-color:var(--ink-dim)}
+  .cell.sel{border-color:var(--sel)}
+  .cell .num{position:absolute;left:0;bottom:0;font-size:7px;line-height:1;
+    background:rgba(0,0,0,.65);color:#fff;padding:1px;pointer-events:none}
+  .tiles{overflow:auto;padding:6px;display:flex;flex-direction:column;gap:3px;min-height:40px}
+  .tilebtn{display:flex;align-items:center;gap:8px;padding:4px;cursor:pointer;
+    border:1px solid transparent;border-radius:3px}
+  .tilebtn:hover{border-color:var(--ink-dim)}
+  .tilebtn.sel{border-color:var(--sel);background:#1d1611}
+  .tilebtn canvas{image-rendering:pixelated;background:#000;border:1px solid var(--line)}
+  .tilebtn .nm{font-size:10px;color:var(--ink);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tilebtn .ed{font-size:10px;color:var(--ink-dim);padding:1px 5px;border:1px solid var(--line);border-radius:3px}
+  .tilebtn .ed:hover{color:var(--accent);border-color:var(--accent)}
+  #stage{flex:1;overflow:auto;position:relative;background:#100c08}
+  #mapwrap{position:absolute;top:0;left:0;padding:20px}
+  #map{image-rendering:pixelated;cursor:crosshair;box-shadow:0 0 0 1px var(--line)}
+  footer{padding:5px 12px;border-top:1px solid var(--line);background:var(--panel);
+    color:var(--ink-dim);font-size:11px;display:flex;gap:16px;flex-wrap:wrap}
+  footer b{color:var(--ink)}
+  kbd{background:#15100c;border:1px solid var(--line);border-radius:3px;padding:0 4px;font-size:10px}
+  .palrow{display:flex;gap:10px;padding:6px 12px;flex-wrap:wrap;align-items:center;border-bottom:1px solid var(--line);background:#1d1611}
+  .pc{display:flex;gap:4px;align-items:center}
+  .sw{width:16px;height:16px;border:1px solid var(--line);display:inline-block}
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:10}
+  .modal.show{display:flex}
+  .mbox{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:16px;max-width:90vw;max-height:90vh;overflow:auto}
+  .mbox h3{margin:0 0 10px;color:var(--accent);font-size:13px}
+  .mrow{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+  #tileGrid{display:grid;gap:1px;background:var(--line);border:1px solid var(--line);margin:8px 0}
+  #tileGrid .tg{width:26px;height:26px;background:#000;image-rendering:pixelated;cursor:pointer;position:relative}
+  #tileGrid .tg .n{position:absolute;left:0;bottom:0;font-size:7px;background:rgba(0,0,0,.6);color:#fff;padding:1px}
+  .hint{color:var(--ink-dim);font-size:11px;margin:4px 0}
+  #tilePal{display:flex;flex-wrap:wrap;gap:2px;max-width:520px;max-height:120px;overflow:auto;
+    border:1px solid var(--line);padding:5px;margin:6px 0;background:#15100c}
+  #tilePal .cell{width:26px;height:26px}
+  #tilePalSel{display:inline-block;font-size:11px;color:var(--accent);margin-left:8px}
+  #glyphGrid{display:grid;grid-template-columns:repeat(4,40px);gap:2px;background:var(--line);
+    border:1px solid var(--line);margin:8px 0;width:max-content}
+  #glyphGrid .gx{width:40px;height:20px;cursor:pointer;image-rendering:pixelated}
+  .pairsw{display:flex;align-items:center;gap:5px;padding:4px 8px;border:1px solid var(--line);
+    border-radius:3px;cursor:pointer;background:#15100c}
+  .pairsw.sel{border-color:var(--accent)}
+  .pairsw .b{width:22px;height:14px;border:1px solid #000;display:inline-block}
+</style>
+</head>
+<body>
+<header>
+  <div><h1>THE LAST RELIC</h1><div class="sub">Map Editor</div></div>
+  <div class="sep"></div>
+  <div class="group">
+    <button id="loadChar">Wczytaj charset</button>
+    <button id="loadPal">Wczytaj paletę</button>
+    <button id="loadTiles">Wczytaj klocki</button>
+  </div>
+  <div class="sep"></div>
+  <div class="group">
+    <label>szer</label><input type="number" id="mw" value="40" min="2" max="999">
+    <label>wys</label><input type="number" id="mh" value="25" min="2" max="999">
+    <button id="resize">Ustaw mapę</button>
+  </div>
+  <div class="group"><label>zoom</label><button id="zoomout">−</button><span id="zlbl">×2</span><button id="zoomin">+</button></div>
+  <div class="group"><button id="mBrush" class="on">Pędzel</button><button id="mFill">Wypełnij</button></div>
+  <div class="sep"></div>
+  <div class="group">
+    <button id="expBin">Eksport mapy .bin</button>
+    <button id="expChar">Eksport charset .bin</button>
+    <button id="saveProj">Zapisz projekt</button>
+    <button id="loadProj">Wczytaj projekt</button>
+    <button id="saveTiles">Zapisz klocki</button>
+    <button id="clear" class="danger">Wyczyść</button>
+  </div>
+</header>
+<div class="palrow" id="palrow"><span style="color:var(--ink-dim);font-size:11px">Paleta (para→C64):</span></div>
+<main>
+  <div id="side">
+    <div class="side-sec" style="flex:1.2">
+      <h2>Glify <span id="glyphcount">(brak — wczytaj charset)</span> <button id="newGlyph">+ glif</button></h2>
+      <div class="pal" id="pal"></div>
+    </div>
+    <div class="side-sec" style="flex:1">
+      <h2>Klocki <button id="newTile">+ nowy</button></h2>
+      <div class="tiles" id="tiles"></div>
+    </div>
+  </div>
+  <div id="stage"><div id="mapwrap"><canvas id="map"></canvas></div></div>
+</main>
+<footer>
+  <div>Pędzel: <b id="brushlbl">—</b></div>
+  <div>Pozycja: <b id="poslbl">—</b></div>
+  <div><kbd>LPM</kbd> maluj · <kbd>PPM</kbd> glif 0 · <kbd>przeciągnij</kbd> ciągiem · <kbd>Ctrl+Z</kbd> cofnij · <kbd>Ctrl+Y</kbd> ponów</div>
+  <div>Mapa: <b id="dimlbl">—</b></div>
+</footer>
+<div class="modal" id="modal"><div class="mbox">
+  <h3 id="modalTitle">Edytor klocka</h3>
+  <div class="mrow">
+    <label>nazwa</label><input type="text" id="tName" style="width:180px">
+    <label>szer</label><input type="number" id="tW" value="4" min="1" max="16">
+    <label>wys</label><input type="number" id="tH" value="4" min="1" max="16">
+    <button id="tApplySize">Ustaw siatkę</button>
+  </div>
+  <div class="hint">Wybierz glif z palety poniżej, potem klikaj w siatkę. <kbd>PPM</kbd> w komórce = glif 0.
+    <span>Aktywny glif:</span> <span id="tilePalSel">0</span></div>
+  <div id="tilePal"></div>
+  <div id="tileGrid"></div>
+  <div class="mrow">
+    <button id="tSave" class="on">Zapisz klocek</button>
+    <button id="tSaveAs">Zapisz jako nowy</button>
+    <button id="tDelete" class="danger">Usuń klocek</button>
+    <button id="tCancel">Anuluj</button>
+  </div>
+</div></div>
+<input type="file" id="fileinput" style="display:none">
+<!-- modal: edytor glifu -->
+<div class="modal" id="gmodal"><div class="mbox">
+  <h3 id="gTitle">Edytor glifu</h3>
+  <div class="hint">Malujesz PARAMI 2px (niespójne pary niemożliwe). Wybierz wartość pary, klikaj w siatkę. <kbd>PPM</kbd> = 00 (tło).</div>
+  <div class="mrow" id="gPairs"></div>
+  <div id="glyphGrid"></div>
+  <div class="mrow">
+    <button id="gSave" class="on">Zapisz glif</button>
+    <button id="gSaveAs">Zapisz jako nowy</button>
+    <button id="gClear">Wyczyść</button>
+    <button id="gCancel">Anuluj</button>
+  </div>
+</div></div>
+<script>
+const C64=[[0,0,0],[255,255,255],[104,55,43],[112,164,178],[111,61,134],[88,141,67],
+  [53,40,121],[184,199,111],[111,79,37],[67,57,0],[154,103,89],[68,68,68],
+  [108,108,108],[154,210,132],[108,94,181],[149,149,149]];
+const C64NAME=['czarny','biały','czerwony','cyjan','fiolet','zielony','granat','żółty',
+  'pomarańcz','ciemnobrąz','jasnoczerw','ciemnoszary','szary','jasnozielony','jasnofiolet','jasnoszary'];
+let chars=[], pairCol={0:2,1:10,2:15,3:0}, tiles={};
+let zoom=2, brush={type:'glyph',id:0}, mode='brush';
+let mapW=40,mapH=25, mapData=new Int16Array(mapW*mapH);
+let painting=false,paintErase=false;
+let undoStack=[],redoStack=[],strokeSnapshot=null;
+function snapshot(){return mapData.slice();}
+function pushUndo(prev){undoStack.push(prev);if(undoStack.length>60)undoStack.shift();redoStack=[];}
+function doUndo(){if(!undoStack.length)return;redoStack.push(mapData.slice());mapData=undoStack.pop();resizeCanvas();}
+function doRedo(){if(!redoStack.length)return;undoStack.push(mapData.slice());mapData=redoStack.pop();resizeCanvas();}
+let editingTile=null,tileBuf=null,tileBufW=4,tileBufH=4,tilePaintGlyph=0;
+function colCss(ci){const c=C64[ci];return 'rgb('+c[0]+','+c[1]+','+c[2]+')';}
+function drawGlyph(ctx,gi,ox,oy,s){const ch=chars[gi]||[0,0,0,0,0,0,0,0];
+  for(let ln=0;ln<8;ln++){const b=ch[ln];for(let m=0;m<4;m++){const pair=(b>>(6-m*2))&3;
+    ctx.fillStyle=colCss(pairCol[pair]);ctx.fillRect(ox+m*2*s,oy+ln*s,2*s,s);}}}
+function buildPalRow(){const row=document.getElementById('palrow');
+  row.querySelectorAll('.pc').forEach(e=>e.remove());
+  const labels={0:'00 (tło)',1:'01',2:'10',3:'11 (colorRAM)'};
+  [0,1,2,3].forEach(p=>{const w=document.createElement('div');w.className='pc';
+    const sw=document.createElement('span');sw.className='sw';sw.style.background=colCss(pairCol[p]);
+    const sel=document.createElement('select');
+    C64.forEach((c,ci)=>{const o=document.createElement('option');o.value=ci;
+      o.textContent=ci+' '+C64NAME[ci];if(ci===pairCol[p])o.selected=true;sel.appendChild(o);});
+    sel.onchange=()=>{pairCol[p]=+sel.value;sw.style.background=colCss(pairCol[p]);refreshAll();};
+    const lab=document.createElement('label');lab.textContent=labels[p];
+    w.appendChild(lab);w.appendChild(sw);w.appendChild(sel);row.appendChild(w);});}
+function buildPalette(){const el=document.getElementById('pal');el.innerHTML='';
+  document.getElementById('glyphcount').textContent='('+chars.length+'/256)';
+  for(let i=0;i<chars.length;i++){const c=document.createElement('canvas');c.width=8;c.height=8;
+    drawGlyph(c.getContext('2d'),i,0,0,1);
+    const d=document.createElement('div');d.className='cell'+(brush.type==='glyph'&&brush.id===i?' sel':'');
+    d.dataset.gi=i;d.style.backgroundImage='url('+c.toDataURL()+')';d.style.backgroundSize='cover';
+    d.innerHTML='<span class="num">'+i+'</span>';d.onclick=()=>setBrush('glyph',i);
+    d.ondblclick=()=>openGlyphEditor(i);el.appendChild(d);}}
+function buildTiles(){const el=document.getElementById('tiles');el.innerHTML='';
+  Object.keys(tiles).forEach(name=>{const t=tiles[name];
+    const c=document.createElement('canvas');c.width=t.w*8;c.height=t.h*8;const cx=c.getContext('2d');
+    for(let p=0;p<t.w*t.h;p++)drawGlyph(cx,t.layout[p],(p%t.w)*8,Math.floor(p/t.w)*8,1);
+    const b=document.createElement('div');b.className='tilebtn'+(brush.type==='tile'&&brush.id===name?' sel':'');
+    const cc=document.createElement('canvas');cc.width=30;cc.height=30;const ctx=cc.getContext('2d');ctx.imageSmoothingEnabled=false;
+    const sc=Math.min(30/c.width,30/c.height);ctx.drawImage(c,0,0,c.width*sc,c.height*sc);b.appendChild(cc);
+    const nm=document.createElement('span');nm.className='nm';nm.textContent=name;b.appendChild(nm);
+    const ed=document.createElement('span');ed.className='ed';ed.textContent='edytuj';
+    ed.onclick=e=>{e.stopPropagation();openTileEditor(name);};b.appendChild(ed);
+    b.onclick=()=>setBrush('tile',name);el.appendChild(b);});}
+function setBrush(type,id){brush={type,id};
+  document.getElementById('brushlbl').textContent=type==='glyph'?('glif '+id):('klocek '+id);
+  document.querySelectorAll('.cell').forEach(c=>c.classList.toggle('sel',type==='glyph'&&+c.dataset.gi===id));
+  document.querySelectorAll('.tilebtn').forEach(b=>b.classList.toggle('sel',type==='tile'&&b.querySelector('.nm').textContent===id));}
+function refreshAll(){buildPalRow();buildPalette();buildTiles();renderMap();}
+const map=document.getElementById('map'),mctx=map.getContext('2d');
+function resizeCanvas(){map.width=mapW*8;map.height=mapH*8;
+  map.style.width=(mapW*8*zoom)+'px';map.style.height=(mapH*8*zoom)+'px';
+  document.getElementById('dimlbl').textContent=mapW+'×'+mapH+' glifów';
+  document.getElementById('zlbl').textContent='×'+zoom;renderMap();}
+function renderMap(){mctx.clearRect(0,0,map.width,map.height);
+  for(let y=0;y<mapH;y++)for(let x=0;x<mapW;x++)drawGlyph(mctx,mapData[y*mapW+x],x*8,y*8,1);}
+function paintAt(mx,my,erase){const gx=Math.floor(mx/8),gy=Math.floor(my/8);
+  if(gx<0||gy<0||gx>=mapW||gy>=mapH)return;
+  if(erase){mapData[gy*mapW+gx]=0;drawGlyph(mctx,0,gx*8,gy*8,1);return;}
+  if(brush.type==='glyph'){mapData[gy*mapW+gx]=brush.id;drawGlyph(mctx,brush.id,gx*8,gy*8,1);}
+  else{const t=tiles[brush.id];if(!t)return;
+    for(let p=0;p<t.w*t.h;p++){const ox=gx+(p%t.w),oy=gy+Math.floor(p/t.w);
+      if(ox<mapW&&oy<mapH){mapData[oy*mapW+ox]=t.layout[p];drawGlyph(mctx,t.layout[p],ox*8,oy*8,1);}}}}
+function fillArea(mx,my){const gx=Math.floor(mx/8),gy=Math.floor(my/8);
+  if(gx<0||gy<0||gx>=mapW||gy>=mapH)return;
+  const tgt=mapData[gy*mapW+gx];const repl=brush.type==='glyph'?brush.id:tiles[brush.id].layout[0];
+  if(tgt===repl)return;const st=[[gx,gy]];
+  while(st.length){const a=st.pop(),x=a[0],y=a[1];
+    if(x<0||y<0||x>=mapW||y>=mapH||mapData[y*mapW+x]!==tgt)continue;
+    mapData[y*mapW+x]=repl;st.push([x+1,y],[x-1,y],[x,y+1],[x,y-1]);}renderMap();}
+function evtPos(e){const r=map.getBoundingClientRect();return [(e.clientX-r.left)/zoom,(e.clientY-r.top)/zoom];}
+map.addEventListener('mousedown',e=>{e.preventDefault();const p=evtPos(e);
+  if(mode==='fill'){pushUndo(snapshot());fillArea(p[0],p[1]);return;}
+  strokeSnapshot=snapshot();painting=true;paintErase=(e.button===2);paintAt(p[0],p[1],paintErase);});
+map.addEventListener('mousemove',e=>{const p=evtPos(e);const gx=Math.floor(p[0]/8),gy=Math.floor(p[1]/8);
+  document.getElementById('poslbl').textContent=(gx>=0&&gy>=0&&gx<mapW&&gy<mapH)?(gx+','+gy+' (glif '+mapData[gy*mapW+gx]+')'):'—';
+  if(painting&&mode==='brush')paintAt(p[0],p[1],paintErase);});
+window.addEventListener('mouseup',()=>{if(painting&&strokeSnapshot){pushUndo(strokeSnapshot);strokeSnapshot=null;}painting=false;});
+window.addEventListener('keydown',e=>{
+  if(document.getElementById('modal').classList.contains('show'))return;
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'&&!e.shiftKey){e.preventDefault();doUndo();}
+  else if((e.ctrlKey||e.metaKey)&&(e.key.toLowerCase()==='y'||(e.key.toLowerCase()==='z'&&e.shiftKey))){e.preventDefault();doRedo();}
+});
+map.addEventListener('contextmenu',e=>e.preventDefault());
+function openTileEditor(name){editingTile=name||null;const t=name?tiles[name]:{w:4,h:4,layout:null};
+  tileBufW=t.w;tileBufH=t.h;tileBuf=t.layout?t.layout.slice():new Array(t.w*t.h).fill(0);
+  document.getElementById('tName').value=name||('klocek_'+(Object.keys(tiles).length+1));
+  document.getElementById('tW').value=tileBufW;document.getElementById('tH').value=tileBufH;
+  document.getElementById('modalTitle').textContent=name?('Edytuj: '+name):'Nowy klocek';
+  document.getElementById('tDelete').style.display=name?'':'none';buildTilePal();buildTileGrid();
+  document.getElementById('modal').classList.add('show');}
+function buildTilePal(){const tp=document.getElementById('tilePal');tp.innerHTML='';
+  for(let i=0;i<chars.length;i++){const c=document.createElement('canvas');c.width=8;c.height=8;
+    drawGlyph(c.getContext('2d'),i,0,0,1);
+    const d=document.createElement('div');d.className='cell'+(i===tilePaintGlyph?' sel':'');
+    d.style.backgroundImage='url('+c.toDataURL()+')';d.style.backgroundSize='cover';
+    d.innerHTML='<span class="num">'+i+'</span>';
+    d.onclick=()=>{tilePaintGlyph=i;document.getElementById('tilePalSel').textContent=i;
+      tp.querySelectorAll('.cell').forEach(x=>x.classList.remove('sel'));d.classList.add('sel');};
+    tp.appendChild(d);}
+  document.getElementById('tilePalSel').textContent=tilePaintGlyph;}
+function buildTileGrid(){const g=document.getElementById('tileGrid');
+  g.style.gridTemplateColumns='repeat('+tileBufW+',26px)';g.innerHTML='';
+  for(let i=0;i<tileBufW*tileBufH;i++){const c=document.createElement('canvas');c.width=8;c.height=8;
+    drawGlyph(c.getContext('2d'),tileBuf[i],0,0,1);
+    const d=document.createElement('div');d.className='tg';
+    d.style.backgroundImage='url('+c.toDataURL()+')';d.style.backgroundSize='cover';
+    d.innerHTML='<span class="n">'+tileBuf[i]+'</span>';
+    d.oncontextmenu=e=>{e.preventDefault();tileBuf[i]=0;buildTileGrid();};
+    d.onclick=()=>{tileBuf[i]=tilePaintGlyph;buildTileGrid();};g.appendChild(d);}}
+document.getElementById('tApplySize').onclick=()=>{const nw=+document.getElementById('tW').value,nh=+document.getElementById('tH').value;
+  const nb=new Array(nw*nh).fill(0);
+  for(let y=0;y<Math.min(nh,tileBufH);y++)for(let x=0;x<Math.min(nw,tileBufW);x++)nb[y*nw+x]=tileBuf[y*tileBufW+x];
+  tileBufW=nw;tileBufH=nh;tileBuf=nb;buildTileGrid();};
+document.getElementById('tSave').onclick=()=>{const nm=document.getElementById('tName').value.trim();if(!nm){alert('Podaj nazwę');return;}
+  // zmiana nazwy tego samego klocka: usun stara nazwe tylko jesli to rename istniejacego
+  if(editingTile&&editingTile!==nm){
+    if(tiles[nm] && !confirm('Klocek "'+nm+'" już istnieje. Nadpisać?'))return;
+    delete tiles[editingTile];
+  } else if(!editingTile && tiles[nm]){
+    if(!confirm('Klocek "'+nm+'" już istnieje. Nadpisać?'))return;
+  }
+  tiles[nm]={w:tileBufW,h:tileBufH,layout:tileBuf.slice()};editingTile=nm;closeModal();buildTiles();};
+document.getElementById('tSaveAs').onclick=()=>{const nm=document.getElementById('tName').value.trim();if(!nm){alert('Podaj nazwę');return;}
+  if(tiles[nm] && !confirm('Klocek "'+nm+'" już istnieje. Nadpisać?'))return;
+  // zapisuje pod nazwa z pola NIE ruszajac oryginalu (kopia)
+  tiles[nm]={w:tileBufW,h:tileBufH,layout:tileBuf.slice()};editingTile=nm;closeModal();buildTiles();};
+document.getElementById('tDelete').onclick=()=>{if(editingTile&&confirm('Usunąć '+editingTile+'?')){delete tiles[editingTile];closeModal();buildTiles();}};
+document.getElementById('tCancel').onclick=closeModal;
+function closeModal(){document.getElementById('modal').classList.remove('show');}
+document.getElementById('newTile').onclick=()=>openTileEditor(null);
+
+// ---------- EDYTOR GLIFU ----------
+let editingGlyph=null, glyphBuf=null, pairVal=1; // pairVal: 0..3 (00/01/10/11)
+function openGlyphEditor(gi){
+  editingGlyph=(gi==null?null:gi);
+  glyphBuf=(gi==null)?[0,0,0,0,0,0,0,0]:chars[gi].slice();
+  document.getElementById('gTitle').textContent=(gi==null)?'Nowy glif':('Edytuj glif '+gi);
+  buildPairs();buildGlyphGrid();
+  document.getElementById('gmodal').classList.add('show');
+}
+function buildPairs(){
+  const el=document.getElementById('gPairs');el.innerHTML='<span style="color:var(--ink-dim);font-size:11px">Wartość pary:</span>';
+  const labels=['00 (tło)','01','10','11'];
+  for(let v=0;v<4;v++){
+    const w=document.createElement('div');w.className='pairsw'+(v===pairVal?' sel':'');
+    const b=document.createElement('span');b.className='b';b.style.background=colCss(pairCol[v]);
+    const t=document.createElement('span');t.textContent=labels[v];t.style.fontSize='11px';
+    w.appendChild(b);w.appendChild(t);
+    w.onclick=()=>{pairVal=v;buildPairs();};
+    el.appendChild(w);
+  }
+}
+function glyphPairAt(buf,ln,m){return (buf[ln]>>(6-m*2))&3;}
+function glyphSetPair(buf,ln,m,v){buf[ln]=(buf[ln] & ~(3<<(6-m*2))) | (v<<(6-m*2));}
+function buildGlyphGrid(){
+  const g=document.getElementById('glyphGrid');g.innerHTML='';
+  for(let ln=0;ln<8;ln++)for(let m=0;m<4;m++){
+    const c=document.createElement('canvas');c.width=2;c.height=1;
+    const v=glyphPairAt(glyphBuf,ln,m);const col=C64[pairCol[v]];
+    const cx=c.getContext('2d');cx.fillStyle='rgb('+col[0]+','+col[1]+','+col[2]+')';cx.fillRect(0,0,2,1);
+    const d=document.createElement('div');d.className='gx';
+    d.style.backgroundImage='url('+c.toDataURL()+')';d.style.backgroundSize='cover';
+    d.onclick=()=>{glyphSetPair(glyphBuf,ln,m,pairVal);buildGlyphGrid();};
+    d.oncontextmenu=e=>{e.preventDefault();glyphSetPair(glyphBuf,ln,m,0);buildGlyphGrid();};
+    g.appendChild(d);
+  }
+}
+document.getElementById('newGlyph').onclick=()=>{if(!chars.length){alert('Najpierw wczytaj charset (albo dodaj pierwszy glif).');}openGlyphEditor(null);};
+document.getElementById('gClear').onclick=()=>{glyphBuf=[0,0,0,0,0,0,0,0];buildGlyphGrid();};
+document.getElementById('gCancel').onclick=()=>document.getElementById('gmodal').classList.remove('show');
+document.getElementById('gSave').onclick=()=>{
+  if(editingGlyph==null){chars.push(glyphBuf.slice());}
+  else{chars[editingGlyph]=glyphBuf.slice();}
+  document.getElementById('gmodal').classList.remove('show');refreshAll();
+};
+document.getElementById('gSaveAs').onclick=()=>{
+  chars.push(glyphBuf.slice());
+  document.getElementById('gmodal').classList.remove('show');refreshAll();
+};
+document.getElementById('resize').onclick=()=>{const nw=+document.getElementById('mw').value,nh=+document.getElementById('mh').value;
+  const nd=new Int16Array(nw*nh);
+  for(let y=0;y<Math.min(nh,mapH);y++)for(let x=0;x<Math.min(nw,mapW);x++)nd[y*nw+x]=mapData[y*mapW+x];
+  mapW=nw;mapH=nh;mapData=nd;resizeCanvas();};
+document.getElementById('zoomin').onclick=()=>{zoom=Math.min(16,zoom+1);resizeCanvas();};
+document.getElementById('zoomout').onclick=()=>{zoom=Math.max(1,zoom-1);resizeCanvas();};
+document.getElementById('clear').onclick=()=>{if(confirm('Wyczyścić mapę?')){pushUndo(snapshot());mapData.fill(0);renderMap();}};
+const mB=document.getElementById('mBrush'),mF=document.getElementById('mFill');
+mB.onclick=()=>{mode='brush';mB.classList.add('on');mF.classList.remove('on');};
+mF.onclick=()=>{mode='fill';mF.classList.add('on');mB.classList.remove('on');};
+let pendingKind=null;
+function pickFile(kind,accept){pendingKind=kind;const fi=document.getElementById('fileinput');fi.accept=accept;fi.value='';fi.click();}
+document.getElementById('loadChar').onclick=()=>pickFile('charset','.bin');
+document.getElementById('loadPal').onclick=()=>pickFile('palette','.json');
+document.getElementById('loadTiles').onclick=()=>pickFile('tiles','.json');
+document.getElementById('loadProj').onclick=()=>pickFile('project','.json');
+document.getElementById('fileinput').onchange=e=>{const f=e.target.files[0];if(!f)return;const rd=new FileReader();
+  if(pendingKind==='charset'){rd.onload=()=>{const b=new Uint8Array(rd.result);const n=Math.floor(b.length/8);
+    chars=[];for(let i=0;i<n;i++)chars.push(Array.from(b.slice(i*8,i*8+8)));refreshAll();setBrush('glyph',0);};
+    rd.readAsArrayBuffer(f);}
+  else{rd.onload=()=>{try{const o=JSON.parse(rd.result);
+    if(pendingKind==='palette'){const p=o.pairs||o;['00','01','10','11'].forEach((k,i)=>{if(p[k]!=null)pairCol[i]=p[k];});refreshAll();}
+    else if(pendingKind==='tiles'){tiles=o.tiles||o;buildTiles();}
+    else if(pendingKind==='project'){mapW=o.w;mapH=o.h;mapData=Int16Array.from(o.data);
+      if(o.pairs)['00','01','10','11'].forEach((k,i)=>{if(o.pairs[k]!=null)pairCol[i]=o.pairs[k];});
+      document.getElementById('mw').value=mapW;document.getElementById('mh').value=mapH;refreshAll();resizeCanvas();}
+  }catch(err){alert('Zły plik: '+err.message);}};rd.readAsText(f);}};
+function dl(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();}
+document.getElementById('expBin').onclick=()=>{const buf=new Uint8Array(4+mapW*mapH);
+  buf[0]=mapW&255;buf[1]=(mapW>>8)&255;buf[2]=mapH&255;buf[3]=(mapH>>8)&255;
+  for(let i=0;i<mapW*mapH;i++)buf[4+i]=mapData[i]&255;dl(new Blob([buf]),'map.bin');};
+document.getElementById('saveProj').onclick=()=>{const pairs={'00':pairCol[0],'01':pairCol[1],'10':pairCol[2],'11':pairCol[3]};
+  dl(new Blob([JSON.stringify({w:mapW,h:mapH,pairs,data:Array.from(mapData)})],{type:'application/json'}),'map_project.json');};
+document.getElementById('expChar').onclick=()=>{
+  const buf=new Uint8Array(2048); // 256 znakow x 8
+  for(let i=0;i<chars.length && i<256;i++)for(let k=0;k<8;k++)buf[i*8+k]=chars[i][k]&255;
+  dl(new Blob([buf]),'charset.bin');
+};
+document.getElementById('saveTiles').onclick=()=>{dl(new Blob([JSON.stringify({tiles},null,1)],{type:'application/json'}),'tiles.json');};
+buildPalRow();buildPalette();buildTiles();resizeCanvas();
+</script>
+</body>
+</html>
