@@ -100,11 +100,13 @@
     <button id="resize">Ustaw mapę</button>
   </div>
   <div class="group"><label>zoom</label><button id="zoomout">−</button><span id="zlbl">×2</span><button id="zoomin">+</button></div>
-  <div class="group"><button id="mBrush" class="on">Pędzel</button><button id="mFill">Wypełnij</button></div>
+  <div class="group"><button id="mBrush" class="on">Pędzel</button><button id="mFill">Wypełnij</button><button id="mColl">Kolizje</button></div>
   <div class="sep"></div>
   <div class="group">
     <button id="expBin">Eksport mapy .bin</button>
     <button id="expChar">Eksport charset .bin</button>
+    <button id="expColl">Eksport kolizji</button>
+    <button id="loadColl">Wczytaj kolizje</button>
     <button id="saveProj">Zapisz projekt</button>
     <button id="loadProj">Wczytaj projekt</button>
     <button id="saveTiles">Zapisz klocki</button>
@@ -138,6 +140,7 @@
     <label>szer</label><input type="number" id="tW" value="4" min="1" max="16">
     <label>wys</label><input type="number" id="tH" value="4" min="1" max="16">
     <button id="tApplySize">Ustaw siatkę</button>
+    <button id="tColl">Kolizje</button>
   </div>
   <div class="hint">Wybierz glif z palety poniżej, potem klikaj w siatkę. <kbd>PPM</kbd> w komórce = glif 0.
     <span>Aktywny glif:</span> <span id="tilePalSel">0</span></div>
@@ -171,6 +174,7 @@ const C64=[[0,0,0],[255,255,255],[104,55,43],[112,164,178],[111,61,134],[88,141,
 const C64NAME=['czarny','biały','czerwony','cyjan','fiolet','zielony','granat','żółty',
   'pomarańcz','ciemnobrąz','jasnoczerw','ciemnoszary','szary','jasnozielony','jasnofiolet','jasnoszary'];
 let chars=[], pairCol={0:2,1:10,2:15,3:0}, tiles={};
+let solid=new Uint8Array(256); // kolizja per glif: 1=solid, 0=przejscie
 let zoom=2, brush={type:'glyph',id:0}, mode='brush';
 let mapW=40,mapH=25, mapData=new Int16Array(mapW*mapH);
 let painting=false,paintErase=false;
@@ -179,7 +183,7 @@ function snapshot(){return mapData.slice();}
 function pushUndo(prev){undoStack.push(prev);if(undoStack.length>60)undoStack.shift();redoStack=[];}
 function doUndo(){if(!undoStack.length)return;redoStack.push(mapData.slice());mapData=undoStack.pop();resizeCanvas();}
 function doRedo(){if(!redoStack.length)return;undoStack.push(mapData.slice());mapData=redoStack.pop();resizeCanvas();}
-let editingTile=null,tileBuf=null,tileBufW=4,tileBufH=4,tilePaintGlyph=0;
+let editingTile=null,tileBuf=null,tileBufW=4,tileBufH=4,tilePaintGlyph=0,tileCollMode=false;
 function colCss(ci){const c=C64[ci];return 'rgb('+c[0]+','+c[1]+','+c[2]+')';}
 function drawGlyph(ctx,gi,ox,oy,s){const ch=chars[gi]||[0,0,0,0,0,0,0,0];
   for(let ln=0;ln<8;ln++){const b=ch[ln];for(let m=0;m<4;m++){const pair=(b>>(6-m*2))&3;
@@ -201,8 +205,10 @@ function buildPalette(){const el=document.getElementById('pal');el.innerHTML='';
     drawGlyph(c.getContext('2d'),i,0,0,1);
     const d=document.createElement('div');d.className='cell'+(brush.type==='glyph'&&brush.id===i?' sel':'');
     d.dataset.gi=i;d.style.backgroundImage='url('+c.toDataURL()+')';d.style.backgroundSize='cover';
-    d.innerHTML='<span class="num">'+i+'</span>';d.onclick=()=>setBrush('glyph',i);
-    d.ondblclick=()=>openGlyphEditor(i);el.appendChild(d);}}
+    if(mode==='coll'){d.style.boxShadow='inset 0 0 0 2px '+(solid[i]?'#ff2828':'#3c78ff');}
+    d.innerHTML='<span class="num">'+i+'</span>';
+    d.onclick=()=>{if(mode==='coll'){solid[i]=solid[i]?0:1;renderMap();buildPalette();}else setBrush('glyph',i);};
+    d.ondblclick=()=>{if(mode!=='coll')openGlyphEditor(i);};el.appendChild(d);}}
 function buildTiles(){const el=document.getElementById('tiles');el.innerHTML='';
   Object.keys(tiles).forEach(name=>{const t=tiles[name];
     const c=document.createElement('canvas');c.width=t.w*8;c.height=t.h*8;const cx=c.getContext('2d');
@@ -225,7 +231,16 @@ function resizeCanvas(){map.width=mapW*8;map.height=mapH*8;
   document.getElementById('dimlbl').textContent=mapW+'×'+mapH+' glifów';
   document.getElementById('zlbl').textContent='×'+zoom;renderMap();}
 function renderMap(){mctx.clearRect(0,0,map.width,map.height);
-  for(let y=0;y<mapH;y++)for(let x=0;x<mapW;x++)drawGlyph(mctx,mapData[y*mapW+x],x*8,y*8,1);}
+  for(let y=0;y<mapH;y++)for(let x=0;x<mapW;x++)drawGlyph(mctx,mapData[y*mapW+x],x*8,y*8,1);
+  if(mode==='coll'){
+    for(let y=0;y<mapH;y++)for(let x=0;x<mapW;x++){
+      const gi=mapData[y*mapW+x],s=solid[gi];
+      mctx.fillStyle=s?'rgba(255,40,40,.45)':'rgba(60,120,255,.40)';
+      mctx.fillRect(x*8,y*8,8,8);
+      mctx.strokeStyle=s?'rgba(255,0,0,.9)':'rgba(80,140,255,.7)';
+      mctx.lineWidth=1;mctx.strokeRect(x*8+0.5,y*8+0.5,7,7);
+    }
+  }}
 function paintAt(mx,my,erase){const gx=Math.floor(mx/8),gy=Math.floor(my/8);
   if(gx<0||gy<0||gx>=mapW||gy>=mapH)return;
   if(erase){mapData[gy*mapW+gx]=0;drawGlyph(mctx,0,gx*8,gy*8,1);return;}
@@ -235,13 +250,24 @@ function paintAt(mx,my,erase){const gx=Math.floor(mx/8),gy=Math.floor(my/8);
       if(ox<mapW&&oy<mapH){mapData[oy*mapW+ox]=t.layout[p];drawGlyph(mctx,t.layout[p],ox*8,oy*8,1);}}}}
 function fillArea(mx,my){const gx=Math.floor(mx/8),gy=Math.floor(my/8);
   if(gx<0||gy<0||gx>=mapW||gy>=mapH)return;
-  const tgt=mapData[gy*mapW+gx];const repl=brush.type==='glyph'?brush.id:tiles[brush.id].layout[0];
-  if(tgt===repl)return;const st=[[gx,gy]];
+  const tgt=mapData[gy*mapW+gx];
+  // zbierz caly spojny obszar tego samego glifu
+  const seen=new Uint8Array(mapW*mapH);const cells=[];const st=[[gx,gy]];
   while(st.length){const a=st.pop(),x=a[0],y=a[1];
-    if(x<0||y<0||x>=mapW||y>=mapH||mapData[y*mapW+x]!==tgt)continue;
-    mapData[y*mapW+x]=repl;st.push([x+1,y],[x-1,y],[x,y+1],[x,y-1]);}renderMap();}
+    if(x<0||y<0||x>=mapW||y>=mapH)continue;const idx=y*mapW+x;
+    if(seen[idx]||mapData[idx]!==tgt)continue;seen[idx]=1;cells.push([x,y]);
+    st.push([x+1,y],[x-1,y],[x,y+1],[x,y-1]);}
+  if(brush.type==='glyph'){if(tgt===brush.id)return;
+    for(const c of cells)mapData[c[1]*mapW+c[0]]=brush.id;}
+  else{const t=tiles[brush.id];if(!t)return;
+    // kafelkowanie klockiem, wyrownane do globalnej siatki mapy (wzor ciagly)
+    for(const c of cells){const x=c[0],y=c[1];mapData[y*mapW+x]=t.layout[(y%t.h)*t.w+(x%t.w)];}}
+  renderMap();}
 function evtPos(e){const r=map.getBoundingClientRect();return [(e.clientX-r.left)/zoom,(e.clientY-r.top)/zoom];}
 map.addEventListener('mousedown',e=>{e.preventDefault();const p=evtPos(e);
+  if(mode==='coll'){const gx=Math.floor(p[0]/8),gy=Math.floor(p[1]/8);
+    if(gx<0||gy<0||gx>=mapW||gy>=mapH)return;
+    const gi=mapData[gy*mapW+gx];solid[gi]=solid[gi]?0:1;renderMap();buildPalette();return;}
   if(mode==='fill'){pushUndo(snapshot());fillArea(p[0],p[1]);return;}
   strokeSnapshot=snapshot();painting=true;paintErase=(e.button===2);paintAt(p[0],p[1],paintErase);});
 map.addEventListener('mousemove',e=>{const p=evtPos(e);const gx=Math.floor(p[0]/8),gy=Math.floor(p[1]/8);
@@ -259,7 +285,8 @@ function openTileEditor(name){editingTile=name||null;const t=name?tiles[name]:{w
   document.getElementById('tName').value=name||('klocek_'+(Object.keys(tiles).length+1));
   document.getElementById('tW').value=tileBufW;document.getElementById('tH').value=tileBufH;
   document.getElementById('modalTitle').textContent=name?('Edytuj: '+name):'Nowy klocek';
-  document.getElementById('tDelete').style.display=name?'':'none';buildTilePal();buildTileGrid();
+  document.getElementById('tDelete').style.display=name?'':'none';tileCollMode=false;
+  document.getElementById('tColl').classList.remove('on');buildTilePal();buildTileGrid();
   document.getElementById('modal').classList.add('show');}
 function buildTilePal(){const tp=document.getElementById('tilePal');tp.innerHTML='';
   for(let i=0;i<chars.length;i++){const c=document.createElement('canvas');c.width=8;c.height=8;
@@ -277,9 +304,12 @@ function buildTileGrid(){const g=document.getElementById('tileGrid');
     drawGlyph(c.getContext('2d'),tileBuf[i],0,0,1);
     const d=document.createElement('div');d.className='tg';
     d.style.backgroundImage='url('+c.toDataURL()+')';d.style.backgroundSize='cover';
+    if(tileCollMode){d.style.boxShadow='inset 0 0 0 3px '+(solid[tileBuf[i]]?'#ff2828':'#3c78ff');}
     d.innerHTML='<span class="n">'+tileBuf[i]+'</span>';
-    d.oncontextmenu=e=>{e.preventDefault();tileBuf[i]=0;buildTileGrid();};
-    d.onclick=()=>{tileBuf[i]=tilePaintGlyph;buildTileGrid();};g.appendChild(d);}}
+    d.oncontextmenu=e=>{e.preventDefault();if(!tileCollMode){tileBuf[i]=0;buildTileGrid();}};
+    d.onclick=()=>{if(tileCollMode){const gi=tileBuf[i];solid[gi]=solid[gi]?0:1;buildTileGrid();buildPalette();}
+      else{tileBuf[i]=tilePaintGlyph;buildTileGrid();}};
+    g.appendChild(d);}}
 document.getElementById('tApplySize').onclick=()=>{const nw=+document.getElementById('tW').value,nh=+document.getElementById('tH').value;
   const nb=new Array(nw*nh).fill(0);
   for(let y=0;y<Math.min(nh,tileBufH);y++)for(let x=0;x<Math.min(nw,tileBufW);x++)nb[y*nw+x]=tileBuf[y*tileBufW+x];
@@ -301,6 +331,8 @@ document.getElementById('tDelete').onclick=()=>{if(editingTile&&confirm('Usuną�
 document.getElementById('tCancel').onclick=closeModal;
 function closeModal(){document.getElementById('modal').classList.remove('show');}
 document.getElementById('newTile').onclick=()=>openTileEditor(null);
+document.getElementById('tColl').onclick=()=>{tileCollMode=!tileCollMode;
+  document.getElementById('tColl').classList.toggle('on',tileCollMode);buildTileGrid();};
 
 // ---------- EDYTOR GLIFU ----------
 let editingGlyph=null, glyphBuf=null, pairVal=1; // pairVal: 0..3 (00/01/10/11)
@@ -357,9 +389,11 @@ document.getElementById('resize').onclick=()=>{const nw=+document.getElementById
 document.getElementById('zoomin').onclick=()=>{zoom=Math.min(16,zoom+1);resizeCanvas();};
 document.getElementById('zoomout').onclick=()=>{zoom=Math.max(1,zoom-1);resizeCanvas();};
 document.getElementById('clear').onclick=()=>{if(confirm('Wyczyścić mapę?')){pushUndo(snapshot());mapData.fill(0);renderMap();}};
-const mB=document.getElementById('mBrush'),mF=document.getElementById('mFill');
-mB.onclick=()=>{mode='brush';mB.classList.add('on');mF.classList.remove('on');};
-mF.onclick=()=>{mode='fill';mF.classList.add('on');mB.classList.remove('on');};
+const mB=document.getElementById('mBrush'),mF=document.getElementById('mFill'),mC=document.getElementById('mColl');
+function setMode(m){mode=m;mB.classList.toggle('on',m==='brush');mF.classList.toggle('on',m==='fill');mC.classList.toggle('on',m==='coll');renderMap();buildPalette();}
+mB.onclick=()=>setMode('brush');
+mF.onclick=()=>setMode('fill');
+mC.onclick=()=>setMode('coll');
 let pendingKind=null;
 function pickFile(kind,accept){pendingKind=kind;const fi=document.getElementById('fileinput');fi.accept=accept;fi.value='';fi.click();}
 document.getElementById('loadChar').onclick=()=>pickFile('charset','.bin');
@@ -370,11 +404,15 @@ document.getElementById('fileinput').onchange=e=>{const f=e.target.files[0];if(!
   if(pendingKind==='charset'){rd.onload=()=>{const b=new Uint8Array(rd.result);const n=Math.floor(b.length/8);
     chars=[];for(let i=0;i<n;i++)chars.push(Array.from(b.slice(i*8,i*8+8)));refreshAll();setBrush('glyph',0);};
     rd.readAsArrayBuffer(f);}
+  else if(pendingKind==='collision'){rd.onload=()=>{const b=new Uint8Array(rd.result);
+    solid=new Uint8Array(256);for(let i=0;i<Math.min(256,b.length);i++)solid[i]=b[i]?1:0;renderMap();buildPalette();};
+    rd.readAsArrayBuffer(f);}
   else{rd.onload=()=>{try{const o=JSON.parse(rd.result);
     if(pendingKind==='palette'){const p=o.pairs||o;['00','01','10','11'].forEach((k,i)=>{if(p[k]!=null)pairCol[i]=p[k];});refreshAll();}
     else if(pendingKind==='tiles'){tiles=o.tiles||o;buildTiles();}
     else if(pendingKind==='project'){mapW=o.w;mapH=o.h;mapData=Int16Array.from(o.data);
       if(o.pairs)['00','01','10','11'].forEach((k,i)=>{if(o.pairs[k]!=null)pairCol[i]=o.pairs[k];});
+      if(o.solid){solid=new Uint8Array(256);o.solid.forEach((v,i)=>{if(i<256)solid[i]=v?1:0;});}
       document.getElementById('mw').value=mapW;document.getElementById('mh').value=mapH;refreshAll();resizeCanvas();}
   }catch(err){alert('Zły plik: '+err.message);}};rd.readAsText(f);}};
 function dl(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();}
@@ -382,12 +420,14 @@ document.getElementById('expBin').onclick=()=>{const buf=new Uint8Array(4+mapW*m
   buf[0]=mapW&255;buf[1]=(mapW>>8)&255;buf[2]=mapH&255;buf[3]=(mapH>>8)&255;
   for(let i=0;i<mapW*mapH;i++)buf[4+i]=mapData[i]&255;dl(new Blob([buf]),'map.bin');};
 document.getElementById('saveProj').onclick=()=>{const pairs={'00':pairCol[0],'01':pairCol[1],'10':pairCol[2],'11':pairCol[3]};
-  dl(new Blob([JSON.stringify({w:mapW,h:mapH,pairs,data:Array.from(mapData)})],{type:'application/json'}),'map_project.json');};
+  dl(new Blob([JSON.stringify({w:mapW,h:mapH,pairs,solid:Array.from(solid),data:Array.from(mapData)})],{type:'application/json'}),'map_project.json');};
 document.getElementById('expChar').onclick=()=>{
   const buf=new Uint8Array(2048); // 256 znakow x 8
   for(let i=0;i<chars.length && i<256;i++)for(let k=0;k<8;k++)buf[i*8+k]=chars[i][k]&255;
   dl(new Blob([buf]),'charset.bin');
 };
+document.getElementById('expColl').onclick=()=>{dl(new Blob([solid]),'collision.bin');}; // 256 bajtow: 1=solid
+document.getElementById('loadColl').onclick=()=>pickFile('collision','.bin');
 document.getElementById('saveTiles').onclick=()=>{dl(new Blob([JSON.stringify({tiles},null,1)],{type:'application/json'}),'tiles.json');};
 buildPalRow();buildPalette();buildTiles();resizeCanvas();
 </script>
