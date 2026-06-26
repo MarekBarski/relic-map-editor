@@ -241,8 +241,13 @@ function applyLang(){
   if(mode==='obj')buildObjTypes();
   document.getElementById('brushlbl').textContent=brush.type==='glyph'?L.glifBrush(brush.id):L.tileBrush(brush.id);
 }
-const C64NAME=['czarny','biały','czerwony','cyjan','fiolet','zielony','granat','żółty',
-  'pomarańcz','ciemnobrąz','jasnoczerw','ciemnoszary','szary','jasnozielony','jasnofiolet','jasnoszary'];
+const C64NAMES={
+  pl:['czarny','biały','czerwony','cyjan','fiolet','zielony','granat','żółty',
+      'pomarańcz','ciemnobrąz','jasnoczerw','ciemnoszary','szary','jasnozielony','jasnofiolet','jasnoszary'],
+  en:['black','white','red','cyan','purple','green','blue','yellow',
+      'orange','brown','lt.red','dk.grey','grey','lt.green','lt.blue','lt.grey']
+};
+function cname(i){return C64NAMES[lang][i];}
 let chars=[], pairCol={0:2,1:10,2:15,3:0}, tiles={};
 let solid=new Uint8Array(256); // kolizja per glif: 1=solid, 0=przejscie
 // obiekty/encje - warstwa logiczna osobna od glifow
@@ -279,7 +284,7 @@ function buildPalRow(){const row=document.getElementById('palrow');
     const sw=document.createElement('span');sw.className='sw';sw.style.background=colCss(pairCol[p]);
     const sel=document.createElement('select');
     C64.forEach((c,ci)=>{const o=document.createElement('option');o.value=ci;
-      o.textContent=ci+' '+C64NAME[ci];if(ci===pairCol[p])o.selected=true;sel.appendChild(o);});
+      o.textContent=ci+' '+cname(ci);if(ci===pairCol[p])o.selected=true;sel.appendChild(o);});
     sel.onchange=()=>{pairCol[p]=+sel.value;sw.style.background=colCss(pairCol[p]);refreshAll();};
     const lab=document.createElement('label');lab.textContent=labels[p];
     w.appendChild(lab);w.appendChild(sw);w.appendChild(sel);row.appendChild(w);});}
